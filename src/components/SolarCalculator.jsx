@@ -7,6 +7,7 @@ function SolarCalculator() {
   const [calculationData, setCalculationData] = useState(null)
   const [loadInput, setLoadInput] = useState('10')
   const [unitInput, setUnitInput] = useState('kw')
+  const [phaseInput, setPhaseInput] = useState('single-phase')
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3333'
 
@@ -25,15 +26,23 @@ function SolarCalculator() {
           body: JSON.stringify({
             load: parseFloat(loadInput),
             unit: unitInput,
+            phase: phaseInput,
           }),
         }
       )
 
       if (!response.ok) {
-        throw new Error('Failed to fetch calculation')
+        const errorData = await response.json().catch(() => null)
+        const errorMessage = errorData?.message || `Server error: ${response.status}`
+        throw new Error(errorMessage)
       }
 
       const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.message || 'Calculation failed')
+      }
+
       setCalculationData(result.data)
     } catch (err) {
       setError(err.message)
@@ -44,6 +53,7 @@ function SolarCalculator() {
 
   useEffect(() => {
     calculateSolarSystem()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const renderSystemCard = (systemName, systemData) => {
@@ -90,11 +100,11 @@ function SolarCalculator() {
 
           {/* Inverter Section */}
           <div className="component-section">
-            <h4>Inverter{inverter.inverters.length > 1 ? 's' : ''}</h4>
+            <h4>Inverter{inverter.inverters?.length > 1 ? 's' : ''}</h4>
             <p className="configuration-badge">
               Configuration: {inverter.configuration}
             </p>
-            {inverter.inverters.map((inv, index) => (
+            {inverter.inverters?.map((inv, index) => (
               <div className="component-details" key={index}>
                 {inv.image && (
                   <img
@@ -165,7 +175,27 @@ function SolarCalculator() {
             value={loadInput}
             onChange={(e) => setLoadInput(e.target.value)}
             placeholder="Enter load value"
+            min="0.1"
+            step="0.1"
+            required
           />
+        </div>
+        <div className="input-group">
+          <label htmlFor="phase">Phase:</label>
+          <select
+            id="phase"
+            value={phaseInput}
+            onChange={(e) => {
+              setPhaseInput(e.target.value)
+              // Reset to kW when switching to three-phase
+              if (e.target.value === 'three-phase') {
+                setUnitInput('kw')
+              }
+            }}
+          >
+            <option value="single-phase">Single-Phase (230V)</option>
+            <option value="three-phase">Three-Phase (400V)</option>
+          </select>
         </div>
         <div className="input-group">
           <label htmlFor="unit">Unit:</label>
@@ -173,14 +203,17 @@ function SolarCalculator() {
             id="unit"
             value={unitInput}
             onChange={(e) => setUnitInput(e.target.value)}
+            disabled={phaseInput === 'three-phase'}
           >
             <option value="kw">kW (Kilowatts)</option>
-            <option value="amps">Amps</option>
+            <option value="amps" disabled={phaseInput === 'three-phase'}>
+              Amps {phaseInput === 'three-phase' ? '(N/A for 3-phase)' : ''}
+            </option>
           </select>
         </div>
         <button
           onClick={calculateSolarSystem}
-          disabled={loading}
+          disabled={loading || !loadInput || parseFloat(loadInput) < 0.1}
           className="calculate-btn"
         >
           {loading ? 'Calculating...' : 'Calculate System'}
@@ -212,6 +245,12 @@ function SolarCalculator() {
                 </span>
               </div>
               <div className="summary-item">
+                <span className="summary-label">Phase:</span>
+                <span className="summary-value">
+                  {calculationData.input.phase === 'single-phase' ? 'Single-Phase (230V)' : 'Three-Phase (400V)'}
+                </span>
+              </div>
+              <div className="summary-item">
                 <span className="summary-label">Load (kW):</span>
                 <span className="summary-value">{calculationData.input.loadKw} kW</span>
               </div>
@@ -224,11 +263,20 @@ function SolarCalculator() {
 
           <div className="systems-container">
             <h2>Available Systems</h2>
-            <div className="systems-grid">
-              {renderSystemCard('cheapest', calculationData.systems.cheapest)}
-              {renderSystemCard('featured', calculationData.systems.featured)}
-              {renderSystemCard('premium', calculationData.systems.premium)}
-            </div>
+            {!calculationData.systems.cheapest &&
+            !calculationData.systems.featured &&
+            !calculationData.systems.premium ? (
+              <div className="no-systems-message">
+                <p>No solar systems available for the requested load.</p>
+                <p>Please try a different load value or contact support.</p>
+              </div>
+            ) : (
+              <div className="systems-grid">
+                {renderSystemCard('cheapest', calculationData.systems.cheapest)}
+                {renderSystemCard('featured', calculationData.systems.featured)}
+                {renderSystemCard('premium', calculationData.systems.premium)}
+              </div>
+            )}
           </div>
         </>
       )}
