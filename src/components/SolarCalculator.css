@@ -3,7 +3,7 @@
   margin: 0 auto;
   padding: 2rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
+  min-height: calc(100vh - 56px);
 }
 
 .calculator-header {
@@ -338,6 +338,16 @@
   color: #1e293b;
   font-size: 1.1rem;
   text-align: right;
+}
+
+.battery-note {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .calculations-section {

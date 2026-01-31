@@ -5,9 +5,20 @@ function SolarCalculator() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [calculationData, setCalculationData] = useState(null)
+
+  // System type: 'on-grid' or 'hybrid'
+  const [systemType, setSystemType] = useState('on-grid')
+
+  // On-grid inputs
   const [loadInput, setLoadInput] = useState('10')
   const [unitInput, setUnitInput] = useState('kw')
   const [phaseInput, setPhaseInput] = useState('single-phase')
+
+  // Hybrid inputs
+  const [dayLoadInput, setDayLoadInput] = useState('5')
+  const [nightLoadInput, setNightLoadInput] = useState('3')
+  const [nightHoursInput, setNightHoursInput] = useState('8')
+  const [batteryTypeInput, setBatteryTypeInput] = useState('lithium')
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3333'
 
@@ -16,20 +27,34 @@ function SolarCalculator() {
     setError(null)
 
     try {
-      const response = await fetch(
-        `${apiUrl}/api/v1/solar-calculator/on-grid`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            load: parseFloat(loadInput),
-            unit: unitInput,
-            phase: phaseInput,
-          }),
+      let endpoint, payload
+
+      if (systemType === 'on-grid') {
+        endpoint = `${apiUrl}/api/v1/solar-calculator/on-grid`
+        payload = {
+          load: parseFloat(loadInput),
+          unit: unitInput,
+          phase: phaseInput,
         }
-      )
+      } else {
+        endpoint = `${apiUrl}/api/v1/solar-calculator/hybrid`
+        payload = {
+          dayLoad: parseFloat(dayLoadInput),
+          nightLoad: parseFloat(nightLoadInput),
+          nightHours: parseFloat(nightHoursInput),
+          batteryType: batteryTypeInput,
+          unit: unitInput,
+          phase: phaseInput,
+        }
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null)
@@ -56,10 +81,70 @@ function SolarCalculator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const isValidInput = () => {
+    if (systemType === 'on-grid') {
+      return loadInput && parseFloat(loadInput) >= 0.1
+    }
+    return (
+      dayLoadInput && parseFloat(dayLoadInput) >= 0.1 &&
+      nightLoadInput && parseFloat(nightLoadInput) >= 0.1 &&
+      nightHoursInput && parseFloat(nightHoursInput) >= 1
+    )
+  }
+
+  const renderBatterySection = (battery) => {
+    if (!battery) return null
+
+    return (
+      <div className="component-section">
+        <h4>Battery</h4>
+        <p className="configuration-badge">
+          Type: {battery.batteryType} | {battery.seriesCount} in series × {battery.parallelSets} parallel
+        </p>
+        <div className="component-details">
+          {battery.image && (
+            <img
+              src={battery.image.small || battery.image.mid}
+              alt={battery.name}
+              className="product-image"
+            />
+          )}
+          <div className="component-info">
+            <p className="component-name">{battery.name}</p>
+            <p className="component-sku">SKU: {battery.sku}</p>
+            <div className="component-specs">
+              <span>Voltage: {battery.voltage}V</span>
+              <span>Required Qty: {battery.requiredQuantity}</span>
+              {battery.optionalQuantity !== null && (
+                <span>Optional Qty: {battery.optionalQuantity}</span>
+              )}
+              <span>Unit Price: ${parseFloat(battery.unitPrice).toFixed(2)}</span>
+            </div>
+            <div className="component-specs">
+              <span>Required Runtime: {battery.requiredRuntime}h</span>
+              {battery.optionalRuntime !== null && (
+                <span>Optional Runtime: {battery.optionalRuntime}h</span>
+              )}
+            </div>
+            {battery.addedForInverterCompatibility > 0 && (
+              <p className="battery-note">
+                +{battery.addedForInverterCompatibility} battery(ies) added for inverter compatibility
+              </p>
+            )}
+            <div className="component-subtotal">
+              Subtotal: ${battery.subtotal.toLocaleString()}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const renderSystemCard = (systemName, systemData) => {
     if (!systemData) return null
 
-    const { solarPanel, inverter, totalPrice, calculations } = systemData
+    const { solarPanel, inverter, battery, totalPrice, calculations } = systemData
+    const isHybrid = systemType === 'hybrid'
 
     return (
       <div className="system-card" key={systemName}>
@@ -75,6 +160,11 @@ function SolarCalculator() {
           {/* Solar Panel Section */}
           <div className="component-section">
             <h4>Solar Panels</h4>
+            {isHybrid && (
+              <p className="configuration-badge">
+                Day: {solarPanel.daySolarCount} | Night: {solarPanel.nightSolarCount} | Total: {solarPanel.totalSolarCount}
+              </p>
+            )}
             <div className="component-details">
               {solarPanel.image && (
                 <img
@@ -88,7 +178,7 @@ function SolarCalculator() {
                 <p className="component-sku">SKU: {solarPanel.sku}</p>
                 <div className="component-specs">
                   <span>Power Rating: {solarPanel.powerRating}W</span>
-                  <span>Quantity: {solarPanel.quantity}</span>
+                  <span>Quantity: {isHybrid ? solarPanel.totalSolarCount : solarPanel.quantity}</span>
                   <span>Unit Price: ${parseFloat(solarPanel.unitPrice).toFixed(2)}</span>
                 </div>
                 <div className="component-subtotal">
@@ -132,6 +222,9 @@ function SolarCalculator() {
             </div>
           </div>
 
+          {/* Battery Section (Hybrid only) */}
+          {isHybrid && renderBatterySection(battery)}
+
           {/* Calculations Section */}
           <div className="calculations-section">
             <h4>System Calculations</h4>
@@ -148,11 +241,101 @@ function SolarCalculator() {
                 <span className="calc-label">Inverter Power Needed:</span>
                 <span className="calc-value">{calculations.inverterPowerNeeded.toFixed(2)} kW</span>
               </div>
-              <div className="calc-item">
-                <span className="calc-label">Rounding Method:</span>
-                <span className="calc-value">{calculations.roundingMethod}</span>
-              </div>
+              {isHybrid ? (
+                <>
+                  <div className="calc-item">
+                    <span className="calc-label">Day Rounding:</span>
+                    <span className="calc-value">{calculations.dayRoundingMethod}</span>
+                  </div>
+                  <div className="calc-item">
+                    <span className="calc-label">Night Rounding:</span>
+                    <span className="calc-value">{calculations.nightRoundingMethod}</span>
+                  </div>
+                  <div className="calc-item">
+                    <span className="calc-label">Inverter Charge Hours:</span>
+                    <span className="calc-value">{calculations.hoursInverterCanSupport}h</span>
+                  </div>
+                </>
+              ) : (
+                <div className="calc-item">
+                  <span className="calc-label">Rounding Method:</span>
+                  <span className="calc-value">{calculations.roundingMethod}</span>
+                </div>
+              )}
             </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderInputSummary = () => {
+    if (!calculationData) return null
+
+    if (systemType === 'on-grid') {
+      return (
+        <div className="input-summary">
+          <h2>Your Input</h2>
+          <div className="summary-grid">
+            <div className="summary-item">
+              <span className="summary-label">Original Load:</span>
+              <span className="summary-value">
+                {calculationData.input.originalLoad} {calculationData.input.originalUnit}
+              </span>
+            </div>
+            <div className="summary-item">
+              <span className="summary-label">Phase:</span>
+              <span className="summary-value">
+                {calculationData.input.phase === 'single-phase' ? 'Single-Phase (230V)' : 'Three-Phase (400V)'}
+              </span>
+            </div>
+            <div className="summary-item">
+              <span className="summary-label">Load (kW):</span>
+              <span className="summary-value">{calculationData.input.loadKw} kW</span>
+            </div>
+            <div className="summary-item">
+              <span className="summary-label">Load (Amps):</span>
+              <span className="summary-value">{calculationData.input.loadAmps.toFixed(2)} A</span>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Hybrid summary
+    return (
+      <div className="input-summary">
+        <h2>Your Input</h2>
+        <div className="summary-grid">
+          <div className="summary-item">
+            <span className="summary-label">Day Load:</span>
+            <span className="summary-value">{calculationData.input.dayLoadKw} kW</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">Night Load:</span>
+            <span className="summary-value">{calculationData.input.nightLoadKw} kW</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">Night Hours:</span>
+            <span className="summary-value">{calculationData.input.nightHours}h</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">Battery Type:</span>
+            <span className="summary-value" style={{ textTransform: 'capitalize' }}>
+              {calculationData.input.batteryType}
+            </span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">Phase:</span>
+            <span className="summary-value">
+              {calculationData.input.phase === 'single-phase' ? 'Single-Phase (230V)' : 'Three-Phase (400V)'}
+            </span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">Unit:</span>
+            <span className="summary-value" style={{ textTransform: 'uppercase' }}>
+              {calculationData.input.unit}
+            </span>
           </div>
         </div>
       </div>
@@ -162,24 +345,98 @@ function SolarCalculator() {
   return (
     <div className="solar-calculator-container">
       <header className="calculator-header">
-        <h1>On-Grid Solar System Calculator</h1>
+        <h1>Solar System Calculator</h1>
         <p>Calculate the best solar system for your needs</p>
       </header>
 
       <div className="calculator-input-section">
+        {/* System Type Toggle */}
         <div className="input-group">
-          <label htmlFor="load">Load:</label>
-          <input
-            type="number"
-            id="load"
-            value={loadInput}
-            onChange={(e) => setLoadInput(e.target.value)}
-            placeholder="Enter load value"
-            min="0.1"
-            step="0.1"
-            required
-          />
+          <label htmlFor="systemType">System Type:</label>
+          <select
+            id="systemType"
+            value={systemType}
+            onChange={(e) => {
+              setSystemType(e.target.value)
+              setCalculationData(null)
+            }}
+          >
+            <option value="on-grid">On-Grid (No Battery)</option>
+            <option value="hybrid">Hybrid (With Battery)</option>
+          </select>
         </div>
+
+        {systemType === 'on-grid' ? (
+          /* On-Grid Inputs */
+          <div className="input-group">
+            <label htmlFor="load">Load:</label>
+            <input
+              type="number"
+              id="load"
+              value={loadInput}
+              onChange={(e) => setLoadInput(e.target.value)}
+              placeholder="Enter load value"
+              min="0.1"
+              step="0.1"
+              required
+            />
+          </div>
+        ) : (
+          /* Hybrid Inputs */
+          <>
+            <div className="input-group">
+              <label htmlFor="dayLoad">Day Load:</label>
+              <input
+                type="number"
+                id="dayLoad"
+                value={dayLoadInput}
+                onChange={(e) => setDayLoadInput(e.target.value)}
+                placeholder="Day load"
+                min="0.1"
+                step="0.1"
+                required
+              />
+            </div>
+            <div className="input-group">
+              <label htmlFor="nightLoad">Night Load:</label>
+              <input
+                type="number"
+                id="nightLoad"
+                value={nightLoadInput}
+                onChange={(e) => setNightLoadInput(e.target.value)}
+                placeholder="Night load"
+                min="0.1"
+                step="0.1"
+                required
+              />
+            </div>
+            <div className="input-group">
+              <label htmlFor="nightHours">Night Hours:</label>
+              <input
+                type="number"
+                id="nightHours"
+                value={nightHoursInput}
+                onChange={(e) => setNightHoursInput(e.target.value)}
+                placeholder="Hours"
+                min="1"
+                step="1"
+                required
+              />
+            </div>
+            <div className="input-group">
+              <label htmlFor="batteryType">Battery Type:</label>
+              <select
+                id="batteryType"
+                value={batteryTypeInput}
+                onChange={(e) => setBatteryTypeInput(e.target.value)}
+              >
+                <option value="lithium">Lithium</option>
+                <option value="tubular">Tubular</option>
+              </select>
+            </div>
+          </>
+        )}
+
         <div className="input-group">
           <label htmlFor="phase">Phase:</label>
           <select
@@ -197,6 +454,7 @@ function SolarCalculator() {
             <option value="three-phase">Three-Phase (400V)</option>
           </select>
         </div>
+
         <div className="input-group">
           <label htmlFor="unit">Unit:</label>
           <select
@@ -211,9 +469,10 @@ function SolarCalculator() {
             </option>
           </select>
         </div>
+
         <button
           onClick={calculateSolarSystem}
-          disabled={loading || !loadInput || parseFloat(loadInput) < 0.1}
+          disabled={loading || !isValidInput()}
           className="calculate-btn"
         >
           {loading ? 'Calculating...' : 'Calculate System'}
@@ -235,31 +494,7 @@ function SolarCalculator() {
 
       {calculationData && !loading && (
         <>
-          <div className="input-summary">
-            <h2>Your Input</h2>
-            <div className="summary-grid">
-              <div className="summary-item">
-                <span className="summary-label">Original Load:</span>
-                <span className="summary-value">
-                  {calculationData.input.originalLoad} {calculationData.input.originalUnit}
-                </span>
-              </div>
-              <div className="summary-item">
-                <span className="summary-label">Phase:</span>
-                <span className="summary-value">
-                  {calculationData.input.phase === 'single-phase' ? 'Single-Phase (230V)' : 'Three-Phase (400V)'}
-                </span>
-              </div>
-              <div className="summary-item">
-                <span className="summary-label">Load (kW):</span>
-                <span className="summary-value">{calculationData.input.loadKw} kW</span>
-              </div>
-              <div className="summary-item">
-                <span className="summary-label">Load (Amps):</span>
-                <span className="summary-value">{calculationData.input.loadAmps.toFixed(2)} A</span>
-              </div>
-            </div>
-          </div>
+          {renderInputSummary()}
 
           <div className="systems-container">
             <h2>Available Systems</h2>
