@@ -113,6 +113,7 @@ function SolarCalculator() {
             <p className="component-name">{battery.name}</p>
             <p className="component-sku">SKU: {battery.sku}</p>
             <div className="component-specs">
+              <span>Power Rating: {battery.powerRating}kW</span>
               <span>Voltage: {battery.voltage}V</span>
               <span>Required Qty: {battery.requiredQuantity}</span>
               {battery.optionalQuantity !== null && (
