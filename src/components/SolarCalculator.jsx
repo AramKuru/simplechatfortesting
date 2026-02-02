@@ -210,6 +210,7 @@ function SolarCalculator() {
                     <span>Power Rating: {inv.powerRating}kW</span>
                     <span>Quantity: {inv.quantity}</span>
                     <span>Unit Price: ${parseFloat(inv.unitPrice).toFixed(2)}</span>
+                    {inv.ipClass && <span>IP Class: {inv.ipClass}</span>}
                   </div>
                   <div className="component-subtotal">
                     Subtotal: ${inv.subtotal.toLocaleString()}
