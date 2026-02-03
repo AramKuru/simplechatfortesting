@@ -113,8 +113,12 @@ function SolarCalculator() {
             <p className="component-name">{battery.name}</p>
             <p className="component-sku">SKU: {battery.sku}</p>
             <div className="component-specs">
-              <span>Power Rating: {battery.powerRating}kW</span>
-              <span>Max Charge/Discharge: {battery.maxChargeDischarge}kW</span>
+              {battery.batteryType === 'lithium' && (
+                <span>Power Rating: {battery.powerRating}kW</span>
+              )}
+              {battery.batteryType === 'tubular' && battery.current && (
+                <span>Current: {battery.current}Ah</span>
+              )}
               <span>Voltage: {battery.voltage}V</span>
               <span>Required Qty: {battery.requiredQuantity}</span>
               {battery.optionalQuantity !== null && (
