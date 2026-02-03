@@ -214,6 +214,9 @@ function SolarCalculator() {
                   <p className="component-sku">SKU: {inv.sku}</p>
                   <div className="component-specs">
                     <span>Power Rating: {inv.powerRating}kW</span>
+                    {inv.maxChargeDischarge > 0 && <span>Max Charge/Discharge: {inv.maxChargeDischarge}kW</span>}
+                    {inv.voltage > 0 && <span>Voltage: {inv.voltage}V</span>}
+                    {inv.maxMpptRangeVoltage > 0 && <span>Max MPPT Voltage: {inv.maxMpptRangeVoltage}V</span>}
                     <span>Quantity: {inv.quantity}</span>
                     <span>Unit Price: ${parseFloat(inv.unitPrice).toFixed(2)}</span>
                     {inv.ipClass && <span>IP Class: {inv.ipClass}</span>}
